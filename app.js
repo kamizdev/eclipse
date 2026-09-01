@@ -1,4 +1,3 @@
-```javascript
 // =====================================================
 // BAND DAW - PUBLIC PLAYER
 // =====================================================
@@ -919,4 +918,3 @@ document.getElementById("refreshSongs")
     loadSongs;
 
 loadSongs();
-```
