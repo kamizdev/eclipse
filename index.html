@@ -1,88 +1,257 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#111827">
-  <title>Band DAW — Stem Player</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0b0f16">
+
+  <title>Band DAW</title>
+
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
-  <main class="app-shell">
+
+  <main class="app">
+
+    <!-- HEADER -->
     <header class="topbar">
+
       <div>
-        <p class="eyebrow">LOCAL STEM PLAYER</p>
-        <h1 id="songName">Nessun brano caricato</h1>
-        <p id="status" class="status" role="status">Seleziona gli stem per iniziare.</p>
+        <div class="brand">BAND DAW</div>
+
+        <h1 id="pageTitle">
+          Archivio brani
+        </h1>
+
+        <p id="status">
+          Seleziona un brano per aprire il mixer.
+        </p>
       </div>
-      <label class="button button-primary file-button">
-        <span>＋ Carica stem</span>
-        <input id="fileInput" type="file" accept="audio/wav,audio/mpeg,audio/ogg,audio/mp4,audio/aac,.wav,.mp3,.ogg,.m4a,.aac" multiple>
-      </label>
+
+      <button
+        id="backButton"
+        class="button hidden"
+        type="button">
+        ← Brani
+      </button>
+
     </header>
 
-    <section class="transport card" aria-label="Controlli di riproduzione">
-      <div class="transport-buttons">
-        <button id="playBtn" class="button button-primary" type="button">▶ Play</button>
-        <button id="pauseBtn" class="button" type="button">Ⅱ Pause</button>
-        <button id="stopBtn" class="button" type="button">■ Stop</button>
-      </div>
 
-      <div class="transport-time">
-        <span id="currentTime">0:00</span>
-        <span>/</span>
-        <span id="totalTime">0:00</span>
-      </div>
+    <!-- =========================
+         LIBRARY
+         ========================= -->
 
-      <input id="seekBar" class="seek" type="range" min="0" max="0" step="0.01" value="0" aria-label="Posizione di riproduzione">
+    <section id="library">
 
-      <div class="transport-options">
-        <label class="control-label" for="speedSelect">Velocità
-          <select id="speedSelect">
-            <option value="0.5">50%</option>
-            <option value="0.6">60%</option>
-            <option value="0.7">70%</option>
-            <option value="0.8">80%</option>
-            <option value="0.9">90%</option>
-            <option value="1" selected>100%</option>
-            <option value="1.1">110%</option>
-            <option value="1.2">120%</option>
-          </select>
-        </label>
+      <div class="library-header card">
 
-        <div class="loop-controls" aria-label="Loop A/B">
-          <button id="setABtn" class="button" type="button">A</button>
-          <button id="setBBtn" class="button" type="button">B</button>
-          <button id="clearLoopBtn" class="button" type="button">Cancella A/B</button>
-          <button id="loopToggleBtn" class="button toggle" type="button" aria-pressed="false">Loop OFF</button>
-        </div>
-        <div id="loopReadout" class="loop-readout">A: — &nbsp; B: —</div>
-      </div>
-    </section>
-
-    <section class="mixer card" aria-label="Mixer stem">
-      <div class="mixer-header">
         <div>
-          <h2>Stem</h2>
-          <p id="stemCount">0 tracce</p>
+          <h2>Brani della band</h2>
+
+          <p id="songCount">
+            Caricamento...
+          </p>
         </div>
-        <button id="clearAllBtn" class="button button-danger" type="button">Svuota</button>
+
+        <button
+          id="refreshButton"
+          class="button"
+          type="button">
+          ↻ Aggiorna
+        </button>
+
       </div>
-      <div id="trackList" class="track-list">
-        <div class="empty-state">
-          <div class="empty-icon">♫</div>
-          <h3>Nessuno stem</h3>
-          <p>Carica più file audio insieme. Ogni file diventerà automaticamente una traccia sincronizzata.</p>
+
+
+      <div
+        id="songGrid"
+        class="song-grid">
+
+        <div class="empty card">
+          Caricamento archivio...
         </div>
+
       </div>
+
     </section>
+
+
+    <!-- =========================
+         MIXER
+         ========================= -->
+
+    <section
+      id="mixer"
+      class="hidden">
+
+
+      <!-- TRANSPORT -->
+
+      <section class="transport card">
+
+        <div class="transport-buttons">
+
+          <button
+            id="playButton"
+            class="button primary"
+            type="button">
+            ▶ Play
+          </button>
+
+          <button
+            id="pauseButton"
+            class="button"
+            type="button">
+            II Pause
+          </button>
+
+          <button
+            id="stopButton"
+            class="button"
+            type="button">
+            ■ Stop
+          </button>
+
+        </div>
+
+
+        <div class="time-display">
+
+          <span id="currentTime">
+            0:00
+          </span>
+
+          <span>/</span>
+
+          <span id="totalTime">
+            0:00
+          </span>
+
+        </div>
+
+
+        <input
+          id="seekBar"
+          class="seek"
+          type="range"
+          min="0"
+          max="0"
+          step="0.01"
+          value="0">
+
+
+        <div class="transport-options">
+
+
+          <!-- SPEED -->
+
+          <label>
+            Velocità
+
+            <select id="speed">
+
+              <option value="0.5">50%</option>
+              <option value="0.6">60%</option>
+              <option value="0.7">70%</option>
+              <option value="0.8">80%</option>
+              <option value="0.9">90%</option>
+              <option value="1" selected>100%</option>
+              <option value="1.1">110%</option>
+              <option value="1.2">120%</option>
+
+            </select>
+
+          </label>
+
+
+          <!-- LOOP -->
+
+          <div class="loop-buttons">
+
+            <button
+              id="setA"
+              class="button"
+              type="button">
+              A
+            </button>
+
+            <button
+              id="setB"
+              class="button"
+              type="button">
+              B
+            </button>
+
+            <button
+              id="clearLoop"
+              class="button"
+              type="button">
+              Cancella A/B
+            </button>
+
+            <button
+              id="loopButton"
+              class="button"
+              type="button">
+              Loop OFF
+            </button>
+
+          </div>
+
+
+          <div id="loopInfo">
+            A: — &nbsp;&nbsp; B: —
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <!-- TRACKS -->
+
+      <section class="mixer-panel card">
+
+        <div class="mixer-header">
+
+          <h2>Stem</h2>
+
+          <span id="trackCount">
+            0 tracce
+          </span>
+
+        </div>
+
+
+        <div id="tracks">
+
+          <div class="empty">
+            Nessuno stem caricato.
+          </div>
+
+        </div>
+
+      </section>
+
+    </section>
+
 
     <footer>
-      <span>Audio locale · Web Audio API</span>
+
+      <span>
+        Band DAW · Web Audio API
+      </span>
+
       <span id="audioSupport"></span>
+
     </footer>
+
   </main>
 
+
   <script src="app.js"></script>
+
 </body>
 </html>
