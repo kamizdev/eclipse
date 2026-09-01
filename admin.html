@@ -1,0 +1,135 @@
+```html
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Band DAW — Admin</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<header class="topbar">
+  <div>
+    <h1>🎛 BAND DAW</h1>
+    <span class="subtitle">Pannello amministratore</span>
+  </div>
+
+  <a href="index.html" class="admin-link">SITO</a>
+</header>
+
+<main class="admin-page">
+
+  <!-- LOGIN -->
+
+  <section id="loginSection" class="admin-card">
+
+    <h2>Accesso Admin</h2>
+
+    <input
+      id="email"
+      type="email"
+      placeholder="Email"
+      autocomplete="email"
+    >
+
+    <input
+      id="password"
+      type="password"
+      placeholder="Password"
+      autocomplete="current-password"
+    >
+
+    <button id="loginBtn" class="primary">
+      ACCEDI
+    </button>
+
+    <p id="loginMessage"></p>
+
+  </section>
+
+
+  <!-- ADMIN -->
+
+  <section id="adminSection" class="hidden">
+
+    <div class="admin-header">
+      <div>
+        <h2>Gestione brani</h2>
+        <span id="adminEmail"></span>
+      </div>
+
+      <button id="logoutBtn">
+        ESCI
+      </button>
+    </div>
+
+
+    <!-- NUOVO BRANO -->
+
+    <div class="admin-card">
+
+      <h2>＋ Nuovo brano</h2>
+
+      <input
+        id="newTitle"
+        type="text"
+        placeholder="Titolo del brano"
+      >
+
+      <input
+        id="newArtist"
+        type="text"
+        placeholder="Artista"
+      >
+
+      <label class="file-label">
+        Seleziona gli stem
+
+        <input
+          id="stemFiles"
+          type="file"
+          multiple
+          accept=".wav,.mp3,.ogg,.m4a,.aac,audio/*"
+        >
+      </label>
+
+      <div id="selectedFiles"></div>
+
+      <button id="uploadBtn" class="primary">
+        ⬆ CARICA BRANO
+      </button>
+
+      <div class="progress-wrapper">
+        <div id="progressBar"></div>
+      </div>
+
+      <p id="uploadMessage"></p>
+
+    </div>
+
+
+    <!-- BRANI ESISTENTI -->
+
+    <div class="admin-card">
+
+      <h2>Brani presenti</h2>
+
+      <div id="adminSongs">
+        Caricamento...
+      </div>
+
+    </div>
+
+  </section>
+
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+<script src="admin.js"></script>
+
+</body>
+</html>
+```
