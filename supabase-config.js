@@ -7,7 +7,7 @@
 // → Project Settings
 // → API
 
-const SUPABASE_URL = "https://supabase.com/dashboard/project/rtiyttysuvsdrvccepoe";
+const SUPABASE_URL = "https://rtiyttysuvsdrvccepoe.supabase.co";
 
 const SUPABASE_KEY = "sb_publishable_s27T8o8yE490SQoxmHon7w_BKWMl9uL";
 
