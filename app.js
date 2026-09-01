@@ -1,1498 +1,922 @@
-"use strict";
-
-/*
-=========================================================
- BAND DAW
- Web Audio API
-=========================================================
-
- Struttura audio:
-
- AudioBufferSourceNode
-          ↓
-       GainNode
-          ↓
-      Master Gain
-          ↓
- AudioContext.destination
-
-Gli stem vengono sincronizzati usando
-AudioContext.currentTime.
-
-IMPORTANTE:
-AudioBufferSourceNode è un nodo "one shot":
-dopo start() non può essere riutilizzato.
-
-Per questo Play / Seek / Loop / cambio velocità
-ricreano i source node.
-*/
-
-
-/* =====================================================
-   CONFIGURAZIONE
-===================================================== */
-
-const SONGS_FILE = "songs.json";
-
-const STORAGE_KEY =
-  "band-daw-settings";
-
-
-/* =====================================================
-   ELEMENTI HTML
-===================================================== */
-
-const pageTitle =
-  document.querySelector("#pageTitle");
-
-const status =
-  document.querySelector("#status");
-
-const library =
-  document.querySelector("#library");
-
-const mixer =
-  document.querySelector("#mixer");
-
-const songGrid =
-  document.querySelector("#songGrid");
-
-const songCount =
-  document.querySelector("#songCount");
-
-const refreshButton =
-  document.querySelector("#refreshButton");
-
-const backButton =
-  document.querySelector("#backButton");
-
-const playButton =
-  document.querySelector("#playButton");
-
-const pauseButton =
-  document.querySelector("#pauseButton");
-
-const stopButton =
-  document.querySelector("#stopButton");
-
-const currentTime =
-  document.querySelector("#currentTime");
-
-const totalTime =
-  document.querySelector("#totalTime");
-
-const seekBar =
-  document.querySelector("#seekBar");
-
-const speed =
-  document.querySelector("#speed");
-
-const setAButton =
-  document.querySelector("#setA");
-
-const setBButton =
-  document.querySelector("#setB");
-
-const clearLoopButton =
-  document.querySelector("#clearLoop");
-
-const loopButton =
-  document.querySelector("#loopButton");
-
-const loopInfo =
-  document.querySelector("#loopInfo");
-
-const tracksContainer =
-  document.querySelector("#tracks");
-
-const trackCount =
-  document.querySelector("#trackCount");
-
-const audioSupport =
-  document.querySelector("#audioSupport");
-
-
-/* =====================================================
-   WEB AUDIO
-===================================================== */
-
-const AudioContextClass =
-  window.AudioContext ||
-  window.webkitAudioContext;
-
+```javascript
+// =====================================================
+// BAND DAW - PUBLIC PLAYER
+// =====================================================
 
 let audioContext = null;
-
 let masterGain = null;
 
+let currentSong = null;
+let tracks = [];
 
-/* =====================================================
-   STATO
-===================================================== */
+let isPlaying = false;
+let startedAt = 0;
+let pausedAt = 0;
 
-const state = {
+let playbackSpeed = 1;
 
-  songs: [],
+let animationFrame = null;
 
-  currentSong: null,
-
-  tracks: [],
-
-  playing: false,
-
-  /*
-  posizione logica corrente in secondi
-  */
-  position: 0,
-
-  /*
-  momento AudioContext in cui è partito
-  l'attuale playback
-  */
-  startedAt: 0,
-
-  speed: 1,
-
-  duration: 0,
-
-  loopEnabled: false,
-
-  loopA: null,
-
-  loopB: null,
-
-  settings:
-    loadSettings()
-
-};
+let loopEnabled = false;
+let loopA = null;
+let loopB = null;
 
 
-/* =====================================================
-   SUPPORTO AUDIO
-===================================================== */
+// =====================================================
+// ELEMENTI
+// =====================================================
 
-if (AudioContextClass) {
+const librarySection = document.getElementById("librarySection");
+const mixerSection = document.getElementById("mixerSection");
 
-  audioSupport.textContent =
-    "Web Audio API disponibile";
+const songList = document.getElementById("songList");
+const tracksElement = document.getElementById("tracks");
 
-} else {
+const playBtn = document.getElementById("playBtn");
+const pauseBtn = document.getElementById("pauseBtn");
+const stopBtn = document.getElementById("stopBtn");
 
-  audioSupport.textContent =
-    "Web Audio API non disponibile";
+const seekBar = document.getElementById("seekBar");
 
-  playButton.disabled = true;
+const currentTimeElement =
+    document.getElementById("currentTime");
 
-}
+const totalTimeElement =
+    document.getElementById("totalTime");
 
-
-/* =====================================================
-   STATUS
-===================================================== */
-
-function setStatus(
-  message,
-  error = false
-) {
-
-  status.textContent =
-    message;
-
-  status.style.color =
-    error
-      ? "#ff9c9f"
-      : "";
-
-}
+const speedSelect =
+    document.getElementById("speed");
 
 
-/* =====================================================
-   CARICAMENTO CATALOGO
-===================================================== */
+// =====================================================
+// CARICA ARCHIVIO
+// =====================================================
 
 async function loadSongs() {
 
-  songGrid.innerHTML =
-    `<div class="empty card">
-      Caricamento archivio...
-    </div>`;
+    songList.innerHTML =
+        `<div class="loading">Caricamento...</div>`;
 
-  try {
+    const { data, error } =
+        await supabaseClient
+            .from("songs")
+            .select("*")
+            .order("created_at", {
+                ascending: false
+            });
 
-    const response =
-      await fetch(
-        SONGS_FILE,
-        {
-          cache: "no-cache"
-        }
-      );
+    if (error) {
 
-    if (!response.ok) {
+        console.error(error);
 
-      throw new Error(
-        `HTTP ${response.status}`
-      );
+        songList.innerHTML =
+            `<div class="error">
+                Errore caricamento archivio.
+            </div>`;
 
+        return;
     }
 
+    if (!data.length) {
 
-    const data =
-      await response.json();
+        songList.innerHTML =
+            `<div class="empty">
+                Nessun brano presente.
+            </div>`;
 
-
-    if (!Array.isArray(data.songs)) {
-
-      throw new Error(
-        "songs.json non contiene l'array songs."
-      );
-
+        return;
     }
 
+    songList.innerHTML = "";
 
-    state.songs =
-      data.songs;
+    data.forEach(song => {
 
+        const card =
+            document.createElement("button");
 
-    renderSongs();
+        card.className = "song-card";
 
-    setStatus(
-      "Seleziona un brano per aprire il mixer."
-    );
+        card.innerHTML = `
+            <strong>${escapeHtml(song.title)}</strong>
+            <span>${escapeHtml(song.artist || "")}</span>
+        `;
 
+        card.addEventListener(
+            "click",
+            () => openSong(song)
+        );
 
-  } catch (error) {
+        songList.appendChild(card);
 
-    console.error(error);
-
-    songGrid.innerHTML = `
-      <div class="empty card">
-
-        <h3>
-          Impossibile caricare l'archivio
-        </h3>
-
-        <p>
-          ${escapeHtml(error.message)}
-        </p>
-
-        <p>
-          Se stai usando file://,
-          avvia un piccolo server locale.
-        </p>
-
-      </div>
-    `;
-
-    songCount.textContent =
-      "Archivio non disponibile";
-
-    setStatus(
-      "Errore nel caricamento di songs.json.",
-      true
-    );
-
-  }
-
+    });
 }
 
 
-/* =====================================================
-   RENDER BRANI
-===================================================== */
-
-function renderSongs() {
-
-  songCount.textContent =
-    `${state.songs.length} ${
-      state.songs.length === 1
-        ? "brano"
-        : "brani"
-    }`;
-
-
-  if (!state.songs.length) {
-
-    songGrid.innerHTML =
-      `<div class="empty card">
-        Nessun brano pubblicato.
-      </div>`;
-
-    return;
-
-  }
-
-
-  songGrid.innerHTML = "";
-
-
-  state.songs.forEach(song => {
-
-    const card =
-      document.createElement("article");
-
-
-    card.className =
-      "song-card card";
-
-
-    const numberOfStems =
-      Array.isArray(song.stems)
-        ? song.stems.length
-        : 0;
-
-
-    card.innerHTML = `
-
-      <div>
-
-        <div class="song-icon">
-          ♫
-        </div>
-
-        <div class="song-title">
-          ${escapeHtml(
-            song.title || song.id
-          )}
-        </div>
-
-        <div class="song-description">
-          ${numberOfStems}
-          ${numberOfStems === 1
-            ? "stem"
-            : "stem"}
-
-          ${
-            song.description
-              ? " · " +
-                escapeHtml(
-                  song.description
-                )
-              : ""
-          }
-
-        </div>
-
-      </div>
-
-
-      <button
-        class="button primary song-open"
-        type="button">
-
-        Apri mixer
-
-      </button>
-
-    `;
-
-
-    card
-      .querySelector(".song-open")
-      .addEventListener(
-        "click",
-        event => {
-
-          event.stopPropagation();
-
-          openSong(song);
-
-        }
-      );
-
-
-    card.addEventListener(
-      "click",
-      () => openSong(song)
-    );
-
-
-    songGrid.appendChild(card);
-
-  });
-
-}
-
-
-/* =====================================================
-   APRI BRANO
-===================================================== */
+// =====================================================
+// APRI BRANO
+// =====================================================
 
 async function openSong(song) {
 
-  /*
-  Chiudiamo eventuale playback precedente.
-  */
+    currentSong = song;
 
-  stop(false);
+    librarySection.classList.add("hidden");
+    mixerSection.classList.remove("hidden");
 
-  destroyTracks();
+    document.getElementById("songTitle").textContent =
+        song.title;
 
+    document.getElementById("songArtist").textContent =
+        song.artist || "";
 
-  state.currentSong =
-    song;
+    await loadStems(song);
 
-
-  state.position =
-    0;
-
-
-  state.duration =
-    0;
+}
 
 
-  state.loopA =
-    null;
+// =====================================================
+// CARICA STEM
+// =====================================================
 
-  state.loopB =
-    null;
+async function loadStems(song) {
 
-  state.loopEnabled =
-    false;
+    tracksElement.innerHTML =
+        `<div class="loading">
+            Caricamento stem...
+        </div>`;
 
+    const { data, error } =
+        await supabaseClient
+            .from("stems")
+            .select("*")
+            .eq("song_id", song.id)
+            .order("created_at", {
+                ascending: true
+            });
 
-  /*
-  Recuperiamo le impostazioni salvate
-  per questo specifico brano.
-  */
+    if (error) {
 
-  const saved =
-    getSongSettings(song.id);
+        console.error(error);
 
+        tracksElement.innerHTML =
+            `<div class="error">
+                Errore caricamento stem.
+            </div>`;
 
-  state.speed =
-    normalizeSpeed(
-      saved.speed ?? 1
-    );
+        return;
+    }
 
+    tracks = [];
 
-  speed.value =
-    String(state.speed);
+    for (const stem of data) {
 
-
-  showMixer();
-
-
-  pageTitle.textContent =
-    song.title || song.id;
-
-
-  setStatus(
-    `Caricamento di ${
-      song.stems.length
-    } stem...`
-  );
-
-
-  try {
-
-    await ensureAudioContext();
-
-
-    const loadedTracks = [];
-
-
-    const errors = [];
-
-
-    /*
-    Carichiamo uno stem alla volta.
-    In questo modo evitiamo picchi enormi
-    di memoria quando ci sono molti WAV.
-    */
-
-    for (
-      let i = 0;
-      i < song.stems.length;
-      i++
-    ) {
-
-      const stem =
-        song.stems[i];
-
-
-      const name =
-        stem.name ||
-        stem.file ||
-        `Stem ${i + 1}`;
-
-
-      setStatus(
-        `Caricamento ${i + 1}/${song.stems.length}: ${name}`
-      );
-
-
-      try {
-
-        const url =
-          getStemURL(
-            song,
-            stem.file
-          );
-
+        const {
+            data: publicData
+        } = supabaseClient
+            .storage
+            .from("stems")
+            .getPublicUrl(stem.file_path);
 
         const response =
-          await fetch(url);
-
-
-        if (!response.ok) {
-
-          throw new Error(
-            `HTTP ${response.status}`
-          );
-
-        }
-
+            await fetch(publicData.publicUrl);
 
         const arrayBuffer =
-          await response.arrayBuffer();
-
-
-        /*
-        Conversione del file audio
-        in AudioBuffer.
-        */
+            await response.arrayBuffer();
 
         const audioBuffer =
-          await audioContext
-            .decodeAudioData(
-              arrayBuffer
+            await decodeAudio(arrayBuffer);
+
+        tracks.push({
+
+            id: stem.id,
+
+            name: stem.name,
+
+            buffer: audioBuffer,
+
+            gain: 1,
+
+            muted: false,
+
+            solo: false,
+
+            source: null,
+
+            gainNode: null
+
+        });
+
+    }
+
+    renderTracks();
+
+    calculateDuration();
+
+}
+
+
+// =====================================================
+// DECODE AUDIO
+// =====================================================
+
+async function decodeAudio(arrayBuffer) {
+
+    if (!audioContext) {
+
+        audioContext =
+            new AudioContext();
+
+        masterGain =
+            audioContext.createGain();
+
+        masterGain.connect(
+            audioContext.destination
+        );
+    }
+
+    return await audioContext.decodeAudioData(
+        arrayBuffer.slice(0)
+    );
+}
+
+
+// =====================================================
+// DURATA
+// =====================================================
+
+function calculateDuration() {
+
+    let maxDuration = 0;
+
+    tracks.forEach(track => {
+
+        maxDuration =
+            Math.max(
+                maxDuration,
+                track.buffer.duration
             );
 
+    });
 
-        loadedTracks.push({
+    currentSong.duration =
+        maxDuration;
 
-          stem,
+    totalTimeElement.textContent =
+        formatTime(maxDuration);
 
-          audioBuffer
+    seekBar.max =
+        maxDuration;
+
+}
+
+
+// =====================================================
+// RENDER TRACKS
+// =====================================================
+
+function renderTracks() {
+
+    tracksElement.innerHTML = "";
+
+    tracks.forEach((track, index) => {
+
+        const element =
+            document.createElement("div");
+
+        element.className =
+            "track";
+
+        element.innerHTML = `
+
+            <div class="track-name">
+                ${escapeHtml(track.name)}
+            </div>
+
+            <div class="track-controls">
+
+                <button
+                    class="mute"
+                    data-index="${index}">
+                    M
+                </button>
+
+                <button
+                    class="solo"
+                    data-index="${index}">
+                    S
+                </button>
+
+            </div>
+
+            <input
+                class="volume"
+                data-index="${index}"
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value="${track.gain}"
+            >
+
+            <span class="volume-value">
+                ${Math.round(track.gain * 100)}%
+            </span>
+        `;
+
+        tracksElement.appendChild(element);
+
+    });
+
+
+    tracksElement
+        .querySelectorAll(".volume")
+        .forEach(input => {
+
+            input.addEventListener(
+                "input",
+                event => {
+
+                    const index =
+                        Number(event.target.dataset.index);
+
+                    tracks[index].gain =
+                        Number(event.target.value);
+
+                    event.target
+                        .closest(".track")
+                        .querySelector(".volume-value")
+                        .textContent =
+                        Math.round(
+                            tracks[index].gain * 100
+                        ) + "%";
+
+                    updateMix();
+
+                }
+            );
 
         });
 
 
-      } catch (error) {
+    tracksElement
+        .querySelectorAll(".mute")
+        .forEach(button => {
 
-        console.error(
-          "Errore stem:",
-          name,
-          error
-        );
+            button.addEventListener(
+                "click",
+                () => {
 
+                    const index =
+                        Number(button.dataset.index);
 
-        errors.push(name);
+                    tracks[index].muted =
+                        !tracks[index].muted;
 
-      }
+                    button.classList.toggle(
+                        "active",
+                        tracks[index].muted
+                    );
 
-    }
+                    updateMix();
 
-
-    if (!loadedTracks.length) {
-
-      renderTracks();
-
-      setStatus(
-        "Nessuno stem è stato caricato.",
-        true
-      );
-
-      return;
-
-    }
-
-
-    /*
-    Creiamo le tracce reali.
-    */
-
-    state.tracks =
-      loadedTracks.map(
-        ({ stem, audioBuffer }) => {
-
-          const key =
-            createTrackKey(
-              song.id,
-              stem
+                }
             );
 
-
-          const savedTrack =
-            saved.tracks?.[key] || {};
+        });
 
 
-          const gain =
-            audioContext.createGain();
+    tracksElement
+        .querySelectorAll(".solo")
+        .forEach(button => {
+
+            button.addEventListener(
+                "click",
+                () => {
+
+                    const index =
+                        Number(button.dataset.index);
+
+                    tracks[index].solo =
+                        !tracks[index].solo;
+
+                    button.classList.toggle(
+                        "active",
+                        tracks[index].solo
+                    );
+
+                    updateMix();
+
+                }
+            );
+
+        });
+
+}
 
 
-          gain.connect(
-            masterGain
-          );
+// =====================================================
+// MIX
+// =====================================================
 
+function updateMix() {
 
-          return {
+    const hasSolo =
+        tracks.some(track => track.solo);
 
-            id:
-              createID(),
+    tracks.forEach(track => {
 
-            key,
+        let volume =
+            track.gain;
 
-            name:
-              stem.name ||
-              removeExtension(
-                stem.file
-              ),
+        if (track.muted) {
 
-            buffer:
-              audioBuffer,
-
-            duration:
-              audioBuffer.duration,
-
-            volume:
-              Number.isFinite(
-                savedTrack.volume
-              )
-                ? clamp(
-                    savedTrack.volume,
-                    0,
-                    1
-                  )
-                : 1,
-
-            muted:
-              Boolean(
-                savedTrack.muted
-              ),
-
-            solo:
-              Boolean(
-                savedTrack.solo
-              ),
-
-            gain,
-
-            source: null,
-
-            html: null
-
-          };
+            volume = 0;
 
         }
-      );
 
+        if (
+            hasSolo &&
+            !track.solo
+        ) {
 
-    /*
-    La durata totale è quella dello
-    stem più lungo.
-    */
+            volume = 0;
 
-    state.duration =
-      Math.max(
-        ...state.tracks.map(
-          track =>
-            track.duration
-        )
-      );
+        }
 
+        if (track.gainNode) {
 
-    /*
-    Recuperiamo loop salvato.
-    */
+            track.gainNode.gain.setValueAtTime(
+                volume,
+                audioContext.currentTime
+            );
 
-    state.loopA =
-      Number.isFinite(
-        saved.loopA
-      )
-        ? saved.loopA
-        : null;
+        }
 
-
-    state.loopB =
-      Number.isFinite(
-        saved.loopB
-      )
-        ? saved.loopB
-        : null;
-
-
-    state.loopEnabled =
-      Boolean(
-        saved.loopEnabled
-      );
-
-
-    /*
-    Verifica che i valori salvati
-    siano ancora validi.
-    */
-
-    if (
-      !Number.isFinite(state.loopA) ||
-      state.loopA < 0 ||
-      state.loopA > state.duration
-    ) {
-
-      state.loopA = null;
-
-    }
-
-
-    if (
-      !Number.isFinite(state.loopB) ||
-      state.loopB < 0 ||
-      state.loopB > state.duration
-    ) {
-
-      state.loopB = null;
-
-    }
-
-
-    if (!validLoop()) {
-
-      state.loopEnabled =
-        false;
-
-    }
-
-
-    updateLoopUI();
-
-    updateAllGains();
-
-    renderTracks();
-
-    updateTransportUI();
-
-    saveSettings();
-
-
-    if (errors.length) {
-
-      setStatus(
-        `${loadedTracks.length} stem caricati. ` +
-        `${errors.length} non disponibili.`,
-        true
-      );
-
-    } else {
-
-      setStatus(
-        `${loadedTracks.length} stem pronti.`
-      );
-
-    }
-
-
-  } catch (error) {
-
-    console.error(error);
-
-    setStatus(
-      `Errore: ${error.message}`,
-      true
-    );
-
-  }
+    });
 
 }
 
 
-/* =====================================================
-   URL DEGLI STEM
-===================================================== */
-
-function getStemURL(
-  song,
-  filename
-) {
-
-  /*
-  Se "folder" esiste nel JSON,
-  utilizziamo quello.
-
-  Altrimenti:
-
-  songs/<id>/
-  */
-
-  const folder =
-    song.folder ||
-    `songs/${song.id}`;
-
-
-  return (
-    folder.replace(/\/+$/, "") +
-    "/" +
-    filename.replace(/^\/+/, "")
-  );
-
-}
-
-
-/* =====================================================
-   AUDIO CONTEXT
-===================================================== */
-
-async function ensureAudioContext() {
-
-  if (!AudioContextClass) {
-
-    throw new Error(
-      "Web Audio API non supportata."
-    );
-
-  }
-
-
-  if (!audioContext) {
-
-    audioContext =
-      new AudioContextClass();
-
-
-    masterGain =
-      audioContext.createGain();
-
-
-    masterGain.gain.value =
-      1;
-
-
-    masterGain.connect(
-      audioContext.destination
-    );
-
-  }
-
-
-  /*
-  Alcuni browser iniziano con
-  AudioContext "suspended".
-  */
-
-  if (
-    audioContext.state ===
-    "suspended"
-  ) {
-
-    await audioContext.resume();
-
-  }
-
-}
-
-
-/* =====================================================
-   CREAZIONE SOURCE NODE
-===================================================== */
-
-function createSource(
-  track,
-  offset
-) {
-
-  /*
-  IMPORTANTE:
-
-  AudioBufferSourceNode è one-shot.
-
-  Ogni chiamata crea un nuovo nodo.
-  */
-
-  const source =
-    audioContext
-      .createBufferSource();
-
-
-  source.buffer =
-    track.buffer;
-
-
-  source.playbackRate.value =
-    state.speed;
-
-
-  source.connect(
-    track.gain
-  );
-
-
-  source.start(
-    0,
-    clamp(
-      offset,
-      0,
-      track.duration
-    )
-  );
-
-
-  track.source =
-    source;
-
-}
-
-
-/* =====================================================
-   GAIN / MUTE / SOLO
-===================================================== */
-
-function updateTrackGain(
-  track
-) {
-
-  if (!audioContext) {
-    return;
-  }
-
-
-  /*
-  Esiste almeno un Solo?
-  */
-
-  const hasSolo =
-    state.tracks.some(
-      track =>
-        track.solo
-    );
-
-
-  /*
-  Regola:
-
-  nessun Solo:
-      tutti udibili
-
-  almeno un Solo:
-      solo i Solo
-
-  Mute:
-      sempre priorità
-  */
-
-  const allowedBySolo =
-    !hasSolo ||
-    track.solo;
-
-
-  const effectiveVolume =
-    !track.muted &&
-    allowedBySolo
-      ? track.volume
-      : 0;
-
-
-  const now =
-    audioContext.currentTime;
-
-
-  /*
-  Piccolo ramp per evitare click.
-  */
-
-  track.gain.gain
-    .cancelScheduledValues(now);
-
-
-  track.gain.gain
-    .setTargetAtTime(
-      effectiveVolume,
-      now,
-      0.008
-    );
-
-}
-
-
-function updateAllGains() {
-
-  state.tracks.forEach(
-    updateTrackGain
-  );
-
-}
-
-
-/* =====================================================
-   POSIZIONE ATTUALE
-===================================================== */
-
-function getCurrentPosition() {
-
-  if (
-    !state.playing ||
-    !audioContext
-  ) {
-
-    return state.position;
-
-  }
-
-
-  return (
-    state.position +
-    (
-      audioContext.currentTime -
-      state.startedAt
-    ) *
-    state.speed
-  );
-
-}
-
-
-/* =====================================================
-   PLAY
-===================================================== */
+// =====================================================
+// PLAY
+// =====================================================
 
 async function play() {
 
-  if (!state.tracks.length) {
+    if (!tracks.length)
+        return;
 
-    setStatus(
-      "Nessuno stem disponibile.",
-      true
-    );
-
-    return;
-
-  }
-
-
-  try {
-
-    await ensureAudioContext();
-
-
-    /*
-    Se siamo arrivati alla fine,
-    ripartiamo da zero oppure da A.
-    */
+    if (!audioContext)
+        await decodeAudio(
+            tracks[0].buffer
+        );
 
     if (
-      state.position >=
-      state.duration
+        audioContext.state ===
+        "suspended"
     ) {
 
-      state.position =
-        state.loopEnabled &&
-        validLoop()
-          ? state.loopA
-          : 0;
+        await audioContext.resume();
 
     }
 
+    if (isPlaying)
+        return;
 
-    stopSources();
+    createSources();
 
+    startedAt =
+        audioContext.currentTime -
+        pausedAt / playbackSpeed;
 
-    /*
-    Questo è il riferimento comune
-    per TUTTI gli stem.
-    */
+    isPlaying = true;
 
-    state.startedAt =
-      audioContext.currentTime;
-
-
-    state.playing =
-      true;
-
-
-    /*
-    Tutti i source vengono creati
-    con lo stesso offset logico.
-    */
-
-    state.tracks.forEach(
-      track => {
-
-        if (
-          state.position <
-          track.duration
-        ) {
-
-          createSource(
-            track,
-            state.position
-          );
-
-        }
-
-      }
-    );
-
-
-    updateAllGains();
-
-    setStatus(
-      "In riproduzione."
-    );
-
-
-  } catch (error) {
-
-    console.error(error);
-
-    setStatus(
-      `Impossibile riprodurre: ${error.message}`,
-      true
-    );
-
-  }
+    updateAnimation();
 
 }
 
 
-/* =====================================================
-   PAUSE
-===================================================== */
+// =====================================================
+// CREA SOURCE
+// =====================================================
+
+function createSources() {
+
+    tracks.forEach(track => {
+
+        const source =
+            audioContext.createBufferSource();
+
+        const gainNode =
+            audioContext.createGain();
+
+        source.buffer =
+            track.buffer;
+
+        source.playbackRate.value =
+            playbackSpeed;
+
+        source.connect(gainNode);
+
+        gainNode.connect(masterGain);
+
+        track.source =
+            source;
+
+        track.gainNode =
+            gainNode;
+
+    });
+
+    updateMix();
+
+    tracks.forEach(track => {
+
+        track.source.start(
+            0,
+            pausedAt
+        );
+
+    });
+
+}
+
+
+// =====================================================
+// PAUSE
+// =====================================================
 
 function pause() {
 
-  if (!state.playing) {
-    return;
-  }
+    if (!isPlaying)
+        return;
 
+    pausedAt =
+        getCurrentPosition();
 
-  /*
-  Prima salviamo la posizione
-  usando il clock audio.
-  */
+    stopSources();
 
-  state.position =
-    clamp(
-      getCurrentPosition(),
-      0,
-      state.duration
-    );
-
-
-  stopSources();
-
-
-  state.playing =
-    false;
-
-
-  setStatus(
-    "In pausa."
-  );
-
-
-  saveSettings();
+    isPlaying = false;
 
 }
 
 
-/* =====================================================
-   STOP
-===================================================== */
+// =====================================================
+// STOP
+// =====================================================
 
-function stop(
-  showMessage = true
-) {
+function stop() {
 
-  stopSources();
+    stopSources();
 
+    isPlaying = false;
 
-  state.playing =
-    false;
+    pausedAt = 0;
 
-
-  state.position =
-    0;
-
-
-  if (showMessage) {
-
-    setStatus(
-      "Fermato."
-    );
-
-  }
+    updateUI();
 
 }
 
 
-/* =====================================================
-   FERMA SOLO I SOURCE
-===================================================== */
+// =====================================================
+// STOP SOURCES
+// =====================================================
 
 function stopSources() {
 
-  state.tracks.forEach(
-    track => {
+    tracks.forEach(track => {
 
-      if (!track.source) {
-        return;
-      }
+        if (track.source) {
 
+            try {
+                track.source.stop();
+            } catch {}
 
-      try {
+        }
 
-        track.source.stop();
+        track.source = null;
+        track.gainNode = null;
 
-      } catch (_) {}
-
-
-      try {
-
-        track.source.disconnect();
-
-      } catch (_) {}
-
-
-      track.source =
-        null;
-
-    }
-  );
+    });
 
 }
 
 
-/* =====================================================
-   SEEK / RESTART
-===================================================== */
+// =====================================================
+// POSIZIONE
+// =====================================================
 
-function seekTo(
-  newPosition
-) {
+function getCurrentPosition() {
 
-  const target =
-    clamp(
-      Number(newPosition),
-      0,
-      state.duration
-    );
+    if (!isPlaying)
+        return pausedAt;
 
+    return (
+        audioContext.currentTime -
+        startedAt
+    ) * playbackSpeed;
 
-  /*
-  Se non stiamo suonando basta
-  cambiare la posizione logica.
-  */
-
-  if (!state.playing) {
-
-    state.position =
-      target;
-
-    return;
-
-  }
+}
 
 
-  /*
-  Se stiamo suonando ricreiamo
-  tutti i source.
-  */
+// =====================================================
+// SEEK
+// =====================================================
 
-  stopSources();
+function seek(position) {
 
+    const wasPlaying =
+        isPlaying;
 
-  state.position =
-    target;
+    if (wasPlaying)
+        stopSources();
 
-
-  state.startedAt =
-    audioContext.currentTime;
-
-
-  state.tracks.forEach(
-    track => {
-
-      if (
-        target <
-        track.duration
-      ) {
-
-        createSource(
-          track,
-          target
+    pausedAt =
+        Math.max(
+            0,
+            Math.min(
+                position,
+                currentSong.duration
+            )
         );
 
-      }
+    if (wasPlaying) {
+
+        createSources();
+
+        startedAt =
+            audioContext.currentTime -
+            pausedAt / playbackSpeed;
 
     }
-  );
 
-
-  updateAllGains();
+    updateUI();
 
 }
 
 
-/* =====================================================
-   LOOP
-===================================================== */
+// =====================================================
+// LOOP
+// =====================================================
 
-function validLoop() {
+function checkLoop(position) {
 
-  return (
-    Number.isFinite(state.loopA) &&
-    Number.isFinite(state.loopB) &&
-    state.loopA >= 0 &&
-    state.loopB > state.loopA &&
-    state.loopB <= state.duration
-  );
+    if (
+        loopEnabled &&
+        loopA !== null &&
+        loopB !== null &&
+        loopB > loopA &&
+        position >= loopB
+    ) {
+
+        seek(loopA);
+
+    }
 
 }
 
 
-function setA() {
+// =====================================================
+// ANIMAZIONE
+// =====================================================
 
-  if (!state.duration) {
-    return;
-  }
+function updateAnimation() {
+
+    updateUI();
+
+    if (isPlaying) {
+
+        const position =
+            getCurrentPosition();
+
+        if (
+            position >= currentSong.duration
+        ) {
+
+            stop();
+
+            return;
+
+        }
+
+        checkLoop(position);
+
+        animationFrame =
+            requestAnimationFrame(
+                updateAnimation
+            );
+
+    }
+
+}
 
 
-  const position =
-    clamp(
-      getCurrentPosition(),
-      0,
-      state.duration
+// =====================================================
+// UI
+// =====================================================
+
+function updateUI() {
+
+    const position =
+        Math.min(
+            getCurrentPosition(),
+            currentSong?.duration || 0
+        );
+
+    currentTimeElement.textContent =
+        formatTime(position);
+
+    seekBar.value =
+        position;
+
+}
+
+
+// =====================================================
+// EVENTI
+// =====================================================
+
+playBtn.onclick =
+    play;
+
+pauseBtn.onclick =
+    pause;
+
+stopBtn.onclick =
+    stop;
+
+
+seekBar.addEventListener(
+    "input",
+    event => {
+
+        seek(
+            Number(event.target.value)
+        );
+
+    }
+);
+
+
+speedSelect.addEventListener(
+    "change",
+    event => {
+
+        const newSpeed =
+            Number(event.target.value);
+
+        const position =
+            getCurrentPosition();
+
+        playbackSpeed =
+            newSpeed;
+
+        if (isPlaying) {
+
+            stopSources();
+
+            pausedAt =
+                position;
+
+            createSources();
+
+            startedAt =
+                audioContext.currentTime -
+                pausedAt / playbackSpeed;
+
+        }
+
+    }
+);
+
+
+// =====================================================
+// LOOP BUTTONS
+// =====================================================
+
+document.getElementById("setA")
+    .onclick = () => {
+
+        loopA =
+            getCurrentPosition();
+
+        document.getElementById("pointA")
+            .textContent =
+            formatTime(loopA);
+
+    };
+
+
+document.getElementById("setB")
+    .onclick = () => {
+
+        loopB =
+            getCurrentPosition();
+
+        document.getElementById("pointB")
+            .textContent =
+            formatTime(loopB);
+
+    };
+
+
+document.getElementById("clearLoop")
+    .onclick = () => {
+
+        loopA = null;
+        loopB = null;
+
+        document.getElementById("pointA")
+            .textContent = "--:--";
+
+        document.getElementById("pointB")
+            .textContent = "--:--";
+
+    };
+
+
+document.getElementById("loopToggle")
+    .onclick = event => {
+
+        loopEnabled =
+            !loopEnabled;
+
+        event.target.textContent =
+            loopEnabled
+                ? "LOOP ON"
+                : "LOOP OFF";
+
+        event.target.classList.toggle(
+            "loop-on",
+            loopEnabled
+        );
+
+        event.target.classList.toggle(
+            "loop-off",
+            !loopEnabled
+        );
+
+    };
+
+
+// =====================================================
+// INDIETRO
+// =====================================================
+
+document.getElementById("backLibrary")
+    .onclick = () => {
+
+        stop();
+
+        mixerSection.classList.add("hidden");
+        librarySection.classList.remove("hidden");
+
+    };
+
+
+// =====================================================
+// UTILITY
+// =====================================================
+
+function formatTime(seconds) {
+
+    if (!Number.isFinite(seconds))
+        return "00:00";
+
+    const min =
+        Math.floor(seconds / 60);
+
+    const sec =
+        Math.floor(seconds % 60);
+
+    return (
+        String(min).padStart(2, "0") +
+        ":" +
+        String(sec).padStart(2, "0")
     );
 
-
-  if (
-    Number.isFinite(state.loopB) &&
-    position >= state.loopB
-  ) {
-
-    setStatus(
-      "A deve essere prima di B.",
-      true
-    );
-
-    return;
-
-  }
+}
 
 
-  state.loopA =
-    position;
+function escapeHtml(value) {
 
-
-  if (!validLoop()) {
-
-    state.loopEnabled =
-      false;
-
-  }
-
-
-  updateLoopUI();
-
-  saveSettings();
+    return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
 
 }
 
 
-function setB() {
+// =====================================================
+// INIT
+// =====================================================
 
-  if (!state.duration) {
-    return;
-  }
+document.getElementById("refreshSongs")
+    .onclick =
+    loadSongs;
 
-
-  const position =
-    clamp(
-      getCurrentPosition(),
-      0,
-      state.duration
-    );
-
-
-  if (
-    Number.isFinite(state.loopA) &&
-    position <= state.loopA
-  ) {
-
-    setStatus(
-      "B deve essere dopo A.",
-      true
-    );
-
-    return;
-
-  }
-
-
-  state.loopB =
-    position;
-
-
-  if (!validLoop()) {
-
-    state.loopEnabled =
-      false;
-
-  }
-
-
-  updateLoopUI();
-
-  saveSettings();
-
-}
-
-
-function clearLoop() {
-
-  state.loopA =
-    null;
-
-  state.loopB =
-    null;
-
-  state.loopEnabled =
-    false;
-
-
-  updateLoopUI();
-
-  saveSettings();
-
-}
-
-
-function toggleLoop() {
-
-  if (!validLoop()) {
-
-    setStatus(
-      "Imposta prima A e B.",
-      true
-    );
-
-    return;
-
-  }
-
-
-  state.loopEnabled =
-    !state.loopEnabled;
-
-
-  updateLoopUI();
-
-  saveSettings();
-
-}
-
-
-function updateLoopUI() {
-
-  loopInfo.textContent =
-    `A: ${
-      Number.isFinite(state.loopA)
-        ? formatTime(state.loopA)
-        : "—"
-    }   B: ${
-      Number.isFinite(state.loopB)
-        ? formatTime(state.loopB)
-        : "—"
-    }`;
-
-
-  loopButton.textContent =
-  
+loadSongs();
+```
