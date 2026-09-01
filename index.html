@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111827">
+  <title>Band DAW — Stem Player</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">LOCAL STEM PLAYER</p>
+        <h1 id="songName">Nessun brano caricato</h1>
+        <p id="status" class="status" role="status">Seleziona gli stem per iniziare.</p>
+      </div>
+      <label class="button button-primary file-button">
+        <span>＋ Carica stem</span>
+        <input id="fileInput" type="file" accept="audio/wav,audio/mpeg,audio/ogg,audio/mp4,audio/aac,.wav,.mp3,.ogg,.m4a,.aac" multiple>
+      </label>
+    </header>
+
+    <section class="transport card" aria-label="Controlli di riproduzione">
+      <div class="transport-buttons">
+        <button id="playBtn" class="button button-primary" type="button">▶ Play</button>
+        <button id="pauseBtn" class="button" type="button">Ⅱ Pause</button>
+        <button id="stopBtn" class="button" type="button">■ Stop</button>
+      </div>
+
+      <div class="transport-time">
+        <span id="currentTime">0:00</span>
+        <span>/</span>
+        <span id="totalTime">0:00</span>
+      </div>
+
+      <input id="seekBar" class="seek" type="range" min="0" max="0" step="0.01" value="0" aria-label="Posizione di riproduzione">
+
+      <div class="transport-options">
+        <label class="control-label" for="speedSelect">Velocità
+          <select id="speedSelect">
+            <option value="0.5">50%</option>
+            <option value="0.6">60%</option>
+            <option value="0.7">70%</option>
+            <option value="0.8">80%</option>
+            <option value="0.9">90%</option>
+            <option value="1" selected>100%</option>
+            <option value="1.1">110%</option>
+            <option value="1.2">120%</option>
+          </select>
+        </label>
+
+        <div class="loop-controls" aria-label="Loop A/B">
+          <button id="setABtn" class="button" type="button">A</button>
+          <button id="setBBtn" class="button" type="button">B</button>
+          <button id="clearLoopBtn" class="button" type="button">Cancella A/B</button>
+          <button id="loopToggleBtn" class="button toggle" type="button" aria-pressed="false">Loop OFF</button>
+        </div>
+        <div id="loopReadout" class="loop-readout">A: — &nbsp; B: —</div>
+      </div>
+    </section>
+
+    <section class="mixer card" aria-label="Mixer stem">
+      <div class="mixer-header">
+        <div>
+          <h2>Stem</h2>
+          <p id="stemCount">0 tracce</p>
+        </div>
+        <button id="clearAllBtn" class="button button-danger" type="button">Svuota</button>
+      </div>
+      <div id="trackList" class="track-list">
+        <div class="empty-state">
+          <div class="empty-icon">♫</div>
+          <h3>Nessuno stem</h3>
+          <p>Carica più file audio insieme. Ogni file diventerà automaticamente una traccia sincronizzata.</p>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <span>Audio locale · Web Audio API</span>
+      <span id="audioSupport"></span>
+    </footer>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
