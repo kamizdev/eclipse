@@ -19,46 +19,228 @@ const loginMessage =
 // =====================================================
 
 document.getElementById("loginBtn")
-    .addEventListener("click", login);
+    .addEventListener(
+        "click",
+        login
+    );
 
 
 async function login() {
 
-    const email =
-        document.getElementById("email").value.trim();
+    const nickname =
+        document
+            .getElementById("nickname")
+            .value
+            .trim();
+
 
     const password =
-        document.getElementById("password").value;
+        document
+            .getElementById("password")
+            .value;
 
-    if (!email || !password) {
+
+    if (!nickname || !password) {
 
         loginMessage.textContent =
-            "Inserisci email e password.";
+            "Inserisci nickname e password.";
 
         return;
     }
 
+
+    if (
+        !/^[a-zA-Z0-9._-]{3,32}$/.test(
+            nickname
+        )
+    ) {
+
+        loginMessage.textContent =
+            "Nickname non valido. Usa 3-32 caratteri: lettere, numeri, punto, trattino o underscore.";
+
+        return;
+    }
+
+
     loginMessage.textContent =
         "Accesso...";
+
+
+    const normalizedNickname =
+        nickname.toLowerCase();
+
+
+    const internalEmail =
+        `${normalizedNickname}@users.band-daw.internal`;
+
 
     const {
         data,
         error
     } =
         await supabaseClient.auth.signInWithPassword({
-            email,
+
+            email:
+                internalEmail,
+
             password
+
         });
+
 
     if (error) {
 
+        console.error(error);
+
         loginMessage.textContent =
-            error.message;
+            "Nickname o password non corretti.";
 
         return;
     }
 
-    showAdmin(data.user);
+
+    // Controllo server-side del ruolo tramite RLS.
+    const {
+        data: profile,
+        error: profileError
+    } =
+        await supabaseClient
+            .from("profiles")
+            .select("nickname, role")
+            .eq("id", data.user.id)
+            .single();
+
+
+    if (
+        profileError ||
+        !profile ||
+        profile.role !== "admin"
+    ) {
+
+        await supabaseClient.auth.signOut();
+
+        loginMessage.textContent =
+            "Questo account non è autorizzato come amministratore.";
+
+        return;
+    }
+
+
+    localStorage.setItem(
+        "band_daw_nickname",
+        profile.nickname ||
+        normalizedNickname
+    );
+
+
+    showAdmin(
+        data.user,
+        profile.nickname ||
+        normalizedNickname
+    );
+
+}
+
+
+// =====================================================
+// MOSTRA ADMIN
+// =====================================================
+
+function showAdmin(
+    user,
+    nickname = null
+) {
+
+    loginSection.classList.add(
+        "hidden"
+    );
+
+    adminSection.classList.remove(
+        "hidden"
+    );
+
+
+    const nicknameElement =
+        document.getElementById(
+            "adminNickname"
+        );
+
+
+    if (nicknameElement) {
+
+        nicknameElement.textContent =
+            nickname ||
+            localStorage.getItem(
+                "band_daw_nickname"
+            ) ||
+            "Admin";
+
+    }
+
+
+    loadAdminSongs();
+
+}
+
+
+// =====================================================
+// CONTROLLO SESSIONE
+// =====================================================
+
+async function checkSession() {
+
+    const {
+        data: {
+            session
+        }
+    } =
+        await supabaseClient.auth.getSession();
+
+
+    if (!session) {
+
+        return;
+
+    }
+
+
+    const {
+        data: profile,
+        error
+    } =
+        await supabaseClient
+            .from("profiles")
+            .select("nickname, role")
+            .eq("id", session.user.id)
+            .single();
+
+
+    if (
+        error ||
+        !profile ||
+        profile.role !== "admin"
+    ) {
+
+        await supabaseClient.auth.signOut();
+
+        localStorage.removeItem(
+            "band_daw_nickname"
+        );
+
+        return;
+    }
+
+
+    localStorage.setItem(
+        "band_daw_nickname",
+        profile.nickname || ""
+    );
+
+
+    showAdmin(
+        session.user,
+        profile.nickname
+    );
 
 }
 
@@ -114,6 +296,10 @@ document.getElementById("logoutBtn")
         async () => {
 
             await supabaseClient.auth.signOut();
+
+            localStorage.removeItem(
+                "band_daw_nickname"
+            );
 
             location.reload();
 

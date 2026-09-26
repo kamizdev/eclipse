@@ -134,6 +134,191 @@ async function openSong(song) {
 
 
 // =====================================================
+// AUDIO CACHE
+// =====================================================
+
+const AUDIO_CACHE_DB = "band-daw-cache";
+const AUDIO_CACHE_STORE = "audio";
+const AUDIO_CACHE_VERSION = 1;
+
+
+function openAudioCache() {
+
+    return new Promise(
+        (resolve, reject) => {
+
+            const request =
+                indexedDB.open(
+                    AUDIO_CACHE_DB,
+                    AUDIO_CACHE_VERSION
+                );
+
+
+            request.onupgradeneeded =
+                event => {
+
+                    const db =
+                        event.target.result;
+
+                    if (
+                        !db.objectStoreNames.contains(
+                            AUDIO_CACHE_STORE
+                        )
+                    ) {
+
+                        db.createObjectStore(
+                            AUDIO_CACHE_STORE
+                        );
+
+                    }
+
+                };
+
+
+            request.onsuccess =
+                () => {
+
+                    resolve(
+                        request.result
+                    );
+
+                };
+
+
+            request.onerror =
+                () => {
+
+                    reject(
+                        request.error
+                    );
+
+                };
+
+        }
+    );
+
+}
+
+
+async function getCachedAudio(key) {
+
+    try {
+
+        const db =
+            await openAudioCache();
+
+
+        return await new Promise(
+            resolve => {
+
+                const transaction =
+                    db.transaction(
+                        AUDIO_CACHE_STORE,
+                        "readonly"
+                    );
+
+
+                const store =
+                    transaction.objectStore(
+                        AUDIO_CACHE_STORE
+                    );
+
+
+                const request =
+                    store.get(key);
+
+
+                request.onsuccess =
+                    () => {
+
+                        resolve(
+                            request.result || null
+                        );
+
+                    };
+
+
+                request.onerror =
+                    () => {
+
+                        resolve(null);
+
+                    };
+
+            }
+        );
+
+    } catch (error) {
+
+        console.warn(
+            "Cache audio non disponibile:",
+            error
+        );
+
+        return null;
+
+    }
+
+}
+
+
+async function setCachedAudio(
+    key,
+    arrayBuffer
+) {
+
+    try {
+
+        const db =
+            await openAudioCache();
+
+
+        await new Promise(
+            resolve => {
+
+                const transaction =
+                    db.transaction(
+                        AUDIO_CACHE_STORE,
+                        "readwrite"
+                    );
+
+
+                const store =
+                    transaction.objectStore(
+                        AUDIO_CACHE_STORE
+                    );
+
+
+                const request =
+                    store.put(
+                        arrayBuffer,
+                        key
+                    );
+
+
+                request.onsuccess =
+                    () => resolve();
+
+
+                request.onerror =
+                    () => resolve();
+
+            }
+        );
+
+    } catch (error) {
+
+        console.warn(
+            "Impossibile salvare audio in cache:",
+            error
+        );
+
+    }
+
+}
+
+
+// =====================================================
 // CARICA STEM
 // =====================================================
 
@@ -144,7 +329,11 @@ async function loadStems(song) {
             Caricamento stem...
         </div>`;
 
-    const { data, error } =
+
+    const {
+        data,
+        error
+    } =
         await supabaseClient
             .from("stems")
             .select("*")
@@ -152,6 +341,7 @@ async function loadStems(song) {
             .order("created_at", {
                 ascending: true
             });
+
 
     if (error) {
 
@@ -165,27 +355,83 @@ async function loadStems(song) {
         return;
     }
 
+
     tracks = [];
 
-    for (const stem of data) {
+
+    if (!data || data.length === 0) {
+
+        tracksElement.innerHTML =
+            `<div class="empty">
+                Nessuno stem presente.
+            </div>`;
+
+        return;
+    }
+
+
+    async function loadSingleStem(stem) {
 
         const {
             data: publicData
-        } = supabaseClient
-            .storage
-            .from("stems")
-            .getPublicUrl(stem.file_path);
+        } =
+            supabaseClient
+                .storage
+                .from("stems")
+                .getPublicUrl(
+                    stem.file_path
+                );
 
-        const response =
-            await fetch(publicData.publicUrl);
 
-        const arrayBuffer =
-            await response.arrayBuffer();
+        const cacheKey =
+            stem.file_path;
+
+
+        let arrayBuffer =
+            await getCachedAudio(
+                cacheKey
+            );
+
+
+        if (!arrayBuffer) {
+
+            const response =
+                await fetch(
+                    publicData.publicUrl,
+                    {
+                        cache: "force-cache"
+                    }
+                );
+
+
+            if (!response.ok) {
+
+                throw new Error(
+                    `Errore HTTP ${response.status}`
+                );
+
+            }
+
+
+            arrayBuffer =
+                await response.arrayBuffer();
+
+
+            await setCachedAudio(
+                cacheKey,
+                arrayBuffer
+            );
+
+        }
+
 
         const audioBuffer =
-            await decodeAudio(arrayBuffer);
+            await decodeAudio(
+                arrayBuffer
+            );
 
-        tracks.push({
+
+        return {
 
             id: stem.id,
 
@@ -203,9 +449,115 @@ async function loadStems(song) {
 
             gainNode: null
 
-        });
+        };
 
     }
+
+
+    // Massimo 4 stem contemporaneamente.
+    const maxConcurrent = 4;
+
+    let completed = 0;
+
+
+    tracksElement.innerHTML =
+        `<div class="loading">
+            Caricamento stem: 0 / ${data.length}
+        </div>`;
+
+
+    for (
+        let start = 0;
+        start < data.length;
+        start += maxConcurrent
+    ) {
+
+        const batch =
+            data.slice(
+                start,
+                start + maxConcurrent
+            );
+
+
+        const results =
+            await Promise.all(
+
+                batch.map(
+                    async stem => {
+
+                        try {
+
+                            const track =
+                                await loadSingleStem(
+                                    stem
+                                );
+
+
+                            completed++;
+
+
+                            tracksElement.innerHTML =
+                                `<div class="loading">
+                                    Caricamento stem:
+                                    ${completed} / ${data.length}
+                                </div>`;
+
+
+                            return {
+                                success: true,
+                                track
+                            };
+
+                        } catch (error) {
+
+                            console.error(
+                                "Errore caricamento stem:",
+                                stem.name,
+                                error
+                            );
+
+
+                            completed++;
+
+
+                            return {
+                                success: false,
+                                track: null
+                            };
+
+                        }
+
+                    }
+                )
+
+            );
+
+
+        for (const result of results) {
+
+            if (result.success) {
+
+                tracks.push(
+                    result.track
+                );
+
+            }
+
+        }
+
+    }
+
+
+    if (tracks.length === 0) {
+
+        tracksElement.innerHTML =
+            `<div class="error">
+                Impossibile caricare gli stem.
+            </div>`;
+
+        return;
+    }
+
 
     renderTracks();
 

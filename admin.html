@@ -27,10 +27,13 @@
     <h2>Accesso Admin</h2>
 
     <input
-      id="email"
-      type="email"
-      placeholder="Email"
-      autocomplete="email"
+      id="nickname"
+      type="text"
+      placeholder="Nickname"
+      autocomplete="username"
+      autocapitalize="none"
+      spellcheck="false"
+      maxlength="32"
     >
 
     <input
@@ -56,7 +59,7 @@
     <div class="admin-header">
       <div>
         <h2>Gestione brani</h2>
-        <span id="adminEmail"></span>
+        <span id="adminNickname"></span>
       </div>
 
       <button id="logoutBtn">
