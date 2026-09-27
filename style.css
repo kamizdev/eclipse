@@ -4,8 +4,8 @@
 
 body {
     margin: 0;
-    background: #111318;
-    color: #f3f4f6;
+    background: #101214;
+    color: #e8eaed;
     font-family:
         Inter,
         system-ui,
@@ -42,13 +42,13 @@ button {
     align-items: center;
     justify-content: space-between;
 
-    background: #181a20;
-    border-bottom: 1px solid #292c35;
+    background: #151719;
+    border-bottom: 1px solid #2a2d31;
 }
 
 .topbar h1 {
     margin: 0;
-    font-size: 20px;
+    font-size: 18px;
 }
 
 .subtitle {
@@ -60,12 +60,12 @@ button {
     color: white;
     text-decoration: none;
 
-    padding: 10px 14px;
+    padding: 8px 12px;
 
     border: 1px solid #343844;
-    border-radius: 8px;
+    border-radius: 5px;
 
-    background: #20232b;
+    background: #1b1e21;
 }
 
 
@@ -74,9 +74,9 @@ button {
 ===================================================== */
 
 main {
-    width: min(1400px, 100%);
+    width: min(1500px, 100%);
     margin: auto;
-    padding: 24px;
+    padding: 22px;
 }
 
 .section-title,
@@ -107,7 +107,7 @@ main {
             minmax(220px, 1fr)
         );
 
-    gap: 14px;
+    gap: 10px;
 
     margin-top: 20px;
 }
@@ -119,11 +119,11 @@ main {
 
     padding: 20px;
 
-    border-radius: 12px;
+    border-radius: 6px;
 
     border: 1px solid #2c3039;
 
-    background: #1b1e25;
+    background: #17191b;
 
     color: white;
 
@@ -132,7 +132,7 @@ main {
 
 .song-card:hover {
     transform: translateY(-2px);
-    background: #222630;
+    background: #1d2023;
 }
 
 .song-card strong,
@@ -159,9 +159,9 @@ main {
 
     padding: 14px;
 
-    background: #181b22;
-    border: 1px solid #292d36;
-    border-radius: 12px;
+    background: #151719;
+    border: 1px solid #2a2e32;
+    border-radius: 6px;
 }
 
 .transport button {
@@ -169,9 +169,9 @@ main {
     height: 44px;
 
     border: 0;
-    border-radius: 8px;
+    border-radius: 5px;
 
-    background: #282c35;
+    background: #25292d;
     color: white;
 }
 
@@ -192,7 +192,7 @@ input[type="password"] {
 
     padding: 12px;
 
-    border-radius: 8px;
+    border-radius: 5px;
 
     border: 1px solid #343844;
 
@@ -223,12 +223,12 @@ input[type="password"] {
 }
 
 .loop-panel button {
-    padding: 10px 14px;
+    padding: 8px 12px;
 
     border: 1px solid #343844;
-    border-radius: 8px;
+    border-radius: 5px;
 
-    background: #20232b;
+    background: #1b1e21;
     color: white;
 }
 
@@ -237,7 +237,7 @@ input[type="password"] {
 }
 
 .loop-panel .loop-off {
-    background: #20232b;
+    background: #1b1e21;
 }
 
 
@@ -263,14 +263,14 @@ input[type="password"] {
         55px;
 
     align-items: center;
-    gap: 14px;
+    gap: 10px;
 
     padding: 14px;
 
-    background: #1a1d24;
+    background: #17191b;
     border: 1px solid #292d35;
 
-    border-radius: 10px;
+    border-radius: 6px;
 }
 
 .track-name {
@@ -287,9 +287,9 @@ input[type="password"] {
     height: 36px;
 
     border: 0;
-    border-radius: 7px;
+    border-radius: 5px;
 
-    background: #292d36;
+    background: #25292d;
     color: white;
 }
 
@@ -317,13 +317,13 @@ input[type="password"] {
 
 .admin-card {
     margin-top: 20px;
-    padding: 24px;
+    padding: 22px;
 
-    background: #191c23;
+    background: #17191b;
 
     border: 1px solid #2a2e38;
 
-    border-radius: 14px;
+    border-radius: 7px;
 }
 
 .admin-card h2 {
@@ -342,10 +342,10 @@ input[type="password"] {
     padding: 14px;
 
     border: 0;
-    border-radius: 9px;
+    border-radius: 5px;
 
-    background: #e5e7eb;
-    color: #111318;
+    background: #d9dde2;
+    color: #101214;
 
     font-weight: 700;
 }
@@ -358,7 +358,7 @@ input[type="password"] {
     padding: 16px;
 
     border: 1px dashed #4a4f5c;
-    border-radius: 9px;
+    border-radius: 5px;
 
     color: #cbd0da;
 }
@@ -382,8 +382,8 @@ input[type="password"] {
 
     padding: 8px;
 
-    background: #20232b;
-    border-radius: 7px;
+    background: #1b1e21;
+    border-radius: 5px;
 }
 
 .progress-wrapper {
@@ -393,7 +393,7 @@ input[type="password"] {
 
     overflow: hidden;
 
-    background: #292d36;
+    background: #25292d;
 
     border-radius: 20px;
 }
@@ -402,7 +402,7 @@ input[type="password"] {
     width: 0%;
     height: 100%;
 
-    background: #e5e7eb;
+    background: #d9dde2;
 
     transition: width 0.2s;
 }
@@ -434,9 +434,9 @@ input[type="password"] {
     padding: 9px 12px;
 
     border: 0;
-    border-radius: 7px;
+    border-radius: 5px;
 
-    background: #5a2828;
+    background: #542b2d;
     color: white;
 }
 
@@ -509,4 +509,102 @@ footer {
         grid-template-columns: 1fr;
     }
 
+}
+
+
+/* =====================================================
+   DAW REFINEMENTS
+===================================================== */
+
+.subtle-button {
+    border: 1px solid #30343a;
+    background: transparent;
+    color: #b8bdc4;
+    padding: 8px 11px;
+    border-radius: 5px;
+}
+
+.subtle-button:hover {
+    background: #1b1e21;
+    color: #f0f1f3;
+}
+
+.transport-main {
+    min-width: 64px;
+    font-weight: 700;
+}
+
+.speed-control {
+    white-space: nowrap;
+}
+
+.speed-control select {
+    width: auto;
+    min-width: 74px;
+    margin-left: 5px;
+}
+
+.loading {
+    min-height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    padding: 24px;
+    border: 1px solid #272b2f;
+    background: #141618;
+    color: #9da3aa;
+    font-size: 13px;
+}
+
+.loading-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #aeb4bb;
+}
+
+button:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.song-card {
+    transition: background 0.12s, border-color 0.12s;
+}
+
+.song-card:hover {
+    transform: none;
+    border-color: #41464d;
+}
+
+.track {
+    min-height: 64px;
+}
+
+.track input[type="range"] {
+    accent-color: #b8bdc4;
+}
+
+.loop-panel button,
+.track-controls button {
+    transition: background 0.12s, border-color 0.12s;
+}
+
+footer {
+    padding-top: 18px;
+}
+
+@media (max-width: 700px) {
+    .topbar {
+        padding: 12px 14px;
+    }
+
+    main {
+        padding: 12px;
+    }
+
+    .song-list {
+        grid-template-columns: 1fr;
+    }
 }
