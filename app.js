@@ -372,15 +372,12 @@ async function loadStems(song) {
 
     async function loadSingleStem(stem) {
 
-        const {
-            data: publicData
-        } =
-            supabaseClient
-                .storage
-                .from("stems")
-                .getPublicUrl(
-                    stem.file_path
-                );
+        // Gli audio non passano più da Supabase Storage.
+        // Supabase resta il database; R2 serve i file audio.
+        const publicUrl =
+            window.eclipseR2AudioUrl(
+                stem.file_path
+            );
 
 
         const cacheKey =
@@ -397,7 +394,7 @@ async function loadStems(song) {
 
             const response =
                 await fetch(
-                    publicData.publicUrl,
+                    publicUrl,
                     {
                         cache: "force-cache"
                     }
