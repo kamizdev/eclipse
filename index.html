@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Band DAW</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<header class="topbar">
+  <div>
+    <h1>BAND DAW</h1>
+    <span class="subtitle">Archivio prove</span>
+  </div>
+
+  <a href="admin.html" class="admin-link">ADMIN</a>
+</header>
+
+<main>
+
+  <!-- ARCHIVIO -->
+  <section id="librarySection">
+    <div class="section-title">
+      <h2>Brani</h2>
+      <button id="refreshSongs" class="subtle-button">Aggiorna</button>
+    </div>
+
+    <div id="songList" class="song-list">
+      <div class="loading">Caricamento brani...</div>
+    </div>
+  </section>
+
+  <!-- MIXER -->
+  <section id="mixerSection" class="hidden">
+
+    <div class="mixer-header">
+      <button id="backLibrary" class="subtle-button">← Brani</button>
+
+      <div>
+        <h2 id="songTitle">Brano</h2>
+        <span id="songArtist"></span>
+      </div>
+    </div>
+
+    <div class="transport">
+
+      <button id="playBtn" class="transport-main">Play</button>
+      <button id="pauseBtn">Pausa</button>
+      <button id="stopBtn">Stop</button>
+
+      <div class="time">
+        <span id="currentTime">00:00</span>
+        /
+        <span id="totalTime">00:00</span>
+      </div>
+
+      <input
+        id="seekBar"
+        type="range"
+        min="0"
+        max="100"
+        value="0"
+      >
+
+      <label class="speed-control">
+        <span>Vel.</span>
+        <select id="speed">
+          <option value="0.5">50%</option>
+          <option value="0.6">60%</option>
+          <option value="0.7">70%</option>
+          <option value="0.8">80%</option>
+          <option value="0.9">90%</option>
+          <option value="1" selected>100%</option>
+          <option value="1.1">110%</option>
+          <option value="1.2">120%</option>
+        </select>
+      </label>
+
+    </div>
+
+    <div class="loop-panel">
+
+      <button id="setA">A</button>
+      <span id="pointA">--:--</span>
+
+      <button id="setB">B</button>
+      <span id="pointB">--:--</span>
+
+      <button id="clearLoop">A/B reset</button>
+
+      <button id="loopToggle" class="loop-off">
+        Loop off
+      </button>
+
+    </div>
+
+    <div id="tracks" class="tracks"></div>
+
+  </section>
+
+</main>
+
+<footer>
+  Band DAW — sistema prove
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+<script src="app.js"></script>
+
+</body>
+</html>
