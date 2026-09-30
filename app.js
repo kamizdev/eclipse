@@ -20,6 +20,78 @@ let loopEnabled = false;
 let loopA = null;
 let loopB = null;
 
+let audioReadyCount = 0;
+let audioTotalCount = 0;
+let audioLoadToken = 0;
+
+function ensureAudioContext() {
+    if (!audioContext) {
+        audioContext = new AudioContext();
+        masterGain = audioContext.createGain();
+        masterGain.connect(audioContext.destination);
+    }
+}
+
+function createMediaTrackAudio(track) {
+    ensureAudioContext();
+
+    if (track.audioElement) {
+        return;
+    }
+
+    const audio = new Audio();
+    audio.preload = "auto";
+    audio.src = track.url;
+    audio.crossOrigin = "anonymous";
+    audio.playsInline = true;
+    audio.playbackRate = playbackSpeed;
+
+    const source =
+        audioContext.createMediaElementSource(audio);
+
+    const gainNode =
+        audioContext.createGain();
+
+    source.connect(gainNode);
+    gainNode.connect(masterGain);
+
+    track.audioElement = audio;
+    track.mediaSource = source;
+    track.gainNode = gainNode;
+
+    audio.addEventListener("loadedmetadata", () => {
+        if (audio.duration && Number.isFinite(audio.duration)) {
+            calculateDuration();
+        }
+    });
+
+    audio.addEventListener("canplay", () => {
+        if (track._loadToken !== audioLoadToken) return;
+
+        track.ready = true;
+        audioReadyCount++;
+
+        const loading = document.querySelector(
+            "#tracks .loading"
+        );
+
+        if (loading) {
+            loading.textContent =
+                `Caricamento audio: ${audioReadyCount} / ${audioTotalCount}`;
+        }
+    });
+
+    audio.addEventListener("error", () => {
+        console.error(
+            "Errore caricamento audio:",
+            track.name,
+            audio.error
+        );
+    });
+}
+
+
+
 
 // =====================================================
 // ELEMENTI
@@ -323,17 +395,10 @@ async function setCachedAudio(
 // =====================================================
 
 async function loadStems(song) {
-
     tracksElement.innerHTML =
-        `<div class="loading">
-            Caricamento stem...
-        </div>`;
+        `<div class="loading">Caricamento stem...</div>`;
 
-
-    const {
-        data,
-        error
-    } =
+    const { data, error } =
         await supabaseClient
             .from("stems")
             .select("*")
@@ -342,9 +407,7 @@ async function loadStems(song) {
                 ascending: true
             });
 
-
     if (error) {
-
         console.error(error);
 
         tracksElement.innerHTML =
@@ -355,19 +418,58 @@ async function loadStems(song) {
         return;
     }
 
-
     tracks = [];
 
-
     if (!data || data.length === 0) {
-
         tracksElement.innerHTML =
             `<div class="empty">
                 Nessuno stem presente.
             </div>`;
-
         return;
     }
+
+    audioLoadToken++;
+    audioReadyCount = 0;
+    audioTotalCount = data.length;
+
+    // IMPORTANT:
+    // We only fetch metadata here. We do NOT fetch the MP3
+    // with fetch(), do NOT create an ArrayBuffer, and do NOT
+    // call decodeAudioData().
+    tracks = data.map(stem => ({
+        id: stem.id,
+        name: stem.name,
+        url: window.eclipseR2AudioUrl(stem.file_path),
+        gain: 1,
+        muted: false,
+        solo: false,
+        source: null,
+        mediaSource: null,
+        gainNode: null,
+        audioElement: null,
+        ready: false,
+        _loadToken: audioLoadToken
+    }));
+
+    renderTracks();
+    calculateDuration();
+
+    // Start browser-side buffering/streaming.
+    // This does not wait for complete files.
+    tracks.forEach(track => {
+        try {
+            createMediaTrackAudio(track);
+        } catch (error) {
+            console.error(
+                "Errore inizializzazione stem:",
+                track.name,
+                error
+            );
+        }
+    });
+
+    calculateDuration();
+}
 
 
     async function loadSingleStem(stem) {
@@ -593,28 +695,31 @@ async function decodeAudio(arrayBuffer) {
 // =====================================================
 
 function calculateDuration() {
-
     let maxDuration = 0;
 
     tracks.forEach(track => {
+        const duration =
+            track.audioElement?.duration;
 
-        maxDuration =
-            Math.max(
-                maxDuration,
-                track.buffer.duration
-            );
-
+        if (
+            Number.isFinite(duration) &&
+            duration > maxDuration
+        ) {
+            maxDuration = duration;
+        }
     });
 
-    currentSong.duration =
-        maxDuration;
+    if (!maxDuration) {
+        // Metadata may not have arrived yet.
+        return;
+    }
+
+    currentSong.duration = maxDuration;
 
     totalTimeElement.textContent =
         formatTime(maxDuration);
 
-    seekBar.max =
-        maxDuration;
-
+    seekBar.max = maxDuration;
 }
 
 
@@ -767,41 +872,27 @@ function renderTracks() {
 // =====================================================
 
 function updateMix() {
-
     const hasSolo =
         tracks.some(track => track.solo);
 
     tracks.forEach(track => {
-
-        let volume =
-            track.gain;
+        let volume = track.gain;
 
         if (track.muted) {
-
             volume = 0;
-
         }
 
-        if (
-            hasSolo &&
-            !track.solo
-        ) {
-
+        if (hasSolo && !track.solo) {
             volume = 0;
-
         }
 
-        if (track.gainNode) {
-
+        if (track.gainNode && audioContext) {
             track.gainNode.gain.setValueAtTime(
                 volume,
                 audioContext.currentTime
             );
-
         }
-
     });
-
 }
 
 
@@ -810,37 +901,48 @@ function updateMix() {
 // =====================================================
 
 async function play() {
+    if (!tracks.length) return;
 
-    if (!tracks.length)
-        return;
+    ensureAudioContext();
 
-    if (!audioContext)
-        await decodeAudio(
-            tracks[0].buffer
-        );
-
-    if (
-        audioContext.state ===
-        "suspended"
-    ) {
-
+    if (audioContext.state === "suspended") {
         await audioContext.resume();
-
     }
 
-    if (isPlaying)
-        return;
+    if (isPlaying) return;
 
-    createSources();
+    const position = pausedAt || 0;
+
+    tracks.forEach(track => {
+        if (!track.audioElement) return;
+
+        track.audioElement.currentTime = position;
+        track.audioElement.playbackRate =
+            playbackSpeed;
+    });
+
+    updateMix();
+
+    const promises = tracks
+        .filter(track => track.audioElement)
+        .map(track =>
+            track.audioElement.play().catch(error => {
+                console.warn(
+                    "Play non riuscito:",
+                    track.name,
+                    error
+                );
+            })
+        );
+
+    await Promise.all(promises);
 
     startedAt =
         audioContext.currentTime -
-        pausedAt / playbackSpeed;
+        position / playbackSpeed;
 
     isPlaying = true;
-
     updateAnimation();
-
 }
 
 
@@ -849,45 +951,29 @@ async function play() {
 // =====================================================
 
 function createSources() {
+    ensureAudioContext();
 
     tracks.forEach(track => {
+        if (!track.audioElement) return;
 
-        const source =
-            audioContext.createBufferSource();
-
-        const gainNode =
-            audioContext.createGain();
-
-        source.buffer =
-            track.buffer;
-
-        source.playbackRate.value =
+        track.audioElement.playbackRate =
             playbackSpeed;
 
-        source.connect(gainNode);
-
-        gainNode.connect(masterGain);
-
-        track.source =
-            source;
-
-        track.gainNode =
-            gainNode;
-
+        track.audioElement.currentTime =
+            Math.max(
+                0,
+                Math.min(
+                    pausedAt,
+                    Number.isFinite(track.audioElement.duration)
+                        ? track.audioElement.duration
+                        : pausedAt
+                )
+            );
     });
 
     updateMix();
-
-    tracks.forEach(track => {
-
-        track.source.start(
-            0,
-            pausedAt
-        );
-
-    });
-
 }
+
 
 
 // =====================================================
@@ -914,16 +1000,22 @@ function pause() {
 // =====================================================
 
 function stop() {
-
     stopSources();
 
     isPlaying = false;
-
     pausedAt = 0;
 
-    updateUI();
+    tracks.forEach(track => {
+        if (track.audioElement) {
+            try {
+                track.audioElement.currentTime = 0;
+            } catch {}
+        }
+    });
 
+    updateUI();
 }
+
 
 
 // =====================================================
@@ -931,23 +1023,17 @@ function stop() {
 // =====================================================
 
 function stopSources() {
-
     tracks.forEach(track => {
+        if (!track.audioElement) return;
 
-        if (track.source) {
+        track.audioElement.pause();
 
-            try {
-                track.source.stop();
-            } catch {}
-
-        }
-
+        // Do not destroy the MediaElementAudioSourceNode.
+        // It can only be connected to one AudioContext source.
         track.source = null;
-        track.gainNode = null;
-
     });
-
 }
+
 
 
 // =====================================================
@@ -955,16 +1041,18 @@ function stopSources() {
 // =====================================================
 
 function getCurrentPosition() {
+    if (!tracks.length) return pausedAt;
 
-    if (!isPlaying)
-        return pausedAt;
+    const activeAudio =
+        tracks.find(
+            track => track.audioElement
+        )?.audioElement;
 
-    return (
-        audioContext.currentTime -
-        startedAt
-    ) * playbackSpeed;
+    if (!activeAudio) return pausedAt;
 
+    return activeAudio.currentTime || pausedAt;
 }
+
 
 
 // =====================================================
@@ -972,35 +1060,54 @@ function getCurrentPosition() {
 // =====================================================
 
 function seek(position) {
-
-    const wasPlaying =
-        isPlaying;
-
-    if (wasPlaying)
-        stopSources();
+    const wasPlaying = isPlaying;
 
     pausedAt =
         Math.max(
             0,
             Math.min(
                 position,
-                currentSong.duration
+                currentSong?.duration || position
             )
         );
 
+    tracks.forEach(track => {
+        const audio = track.audioElement;
+        if (!audio) return;
+
+        if (
+            Number.isFinite(audio.duration) &&
+            audio.duration > 0
+        ) {
+            audio.currentTime =
+                Math.min(
+                    pausedAt,
+                    audio.duration
+                );
+        } else {
+            audio.currentTime = pausedAt;
+        }
+    });
+
     if (wasPlaying) {
-
-        createSources();
-
         startedAt =
             audioContext.currentTime -
             pausedAt / playbackSpeed;
 
+        tracks.forEach(track => {
+            if (
+                track.audioElement &&
+                track.audioElement.paused
+            ) {
+                track.audioElement.play().catch(() => {});
+            }
+        });
     }
 
     updateUI();
-
 }
+
+
 
 
 // =====================================================
@@ -1109,31 +1216,24 @@ seekBar.addEventListener(
 speedSelect.addEventListener(
     "change",
     event => {
-
         const newSpeed =
             Number(event.target.value);
 
-        const position =
-            getCurrentPosition();
+        playbackSpeed = newSpeed;
 
-        playbackSpeed =
-            newSpeed;
+        tracks.forEach(track => {
+            if (track.audioElement) {
+                track.audioElement.playbackRate =
+                    playbackSpeed;
+            }
+        });
 
-        if (isPlaying) {
-
-            stopSources();
-
-            pausedAt =
-                position;
-
-            createSources();
-
+        if (isPlaying && audioContext) {
             startedAt =
                 audioContext.currentTime -
-                pausedAt / playbackSpeed;
-
+                getCurrentPosition() /
+                    playbackSpeed;
         }
-
     }
 );
 
