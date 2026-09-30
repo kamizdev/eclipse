@@ -476,6 +476,10 @@ async function uploadSong() {
         );
 
 
+    // File già caricati su R2 durante questa operazione.
+    // Se il salvataggio nel DB fallisce, li rimuoviamo per evitare orfani.
+    const uploadedR2Paths = [];
+
     try {
 
         for (
@@ -506,29 +510,12 @@ async function uploadSong() {
                 `${song.id}/${Date.now()}-${safeFileName}`;
 
 
-            const {
-                error: uploadError
-            } =
-                await supabaseClient
-                    .storage
-                    .from("stems")
-                    .upload(
-                        path,
-                        file,
-                        {
-                            contentType:
-                                file.type ||
-                                "audio/mpeg",
-                            upsert: false
-                        }
-                    );
+            await window.eclipseR2Upload(
+                file,
+                path
+            );
 
-
-            if (uploadError) {
-
-                throw uploadError;
-
-            }
+            uploadedR2Paths.push(path);
 
 
             // -------------------------------------------------
@@ -590,6 +577,19 @@ async function uploadSong() {
     } catch (error) {
 
         console.error(error);
+
+        if (uploadedR2Paths.length) {
+            try {
+                await window.eclipseR2Delete(
+                    uploadedR2Paths
+                );
+            } catch (cleanupError) {
+                console.error(
+                    "Impossibile ripulire i file R2:",
+                    cleanupError
+                );
+            }
+        }
 
         message.textContent =
             "Errore durante il caricamento: " +
@@ -740,21 +740,13 @@ async function deleteSong(song) {
             );
 
 
-        const {
-            error
-        } =
-            await supabaseClient
-                .storage
-                .from("stems")
-                .remove(paths);
-
-
-        if (error) {
-
+        try {
+            await window.eclipseR2Delete(
+                paths
+            );
+        } catch (error) {
             alert(error.message);
-
             return;
-
         }
 
     }
